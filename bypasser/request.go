@@ -292,8 +292,6 @@ func handleTunnel(target *net.TCPConn, receiver <-chan []byte, sender chan<- []b
 			return
 		case data := <-receiver:
 			log("Data received from receiver.", 6)
-			// fmt.Println(string(data))
-			// fmt.Println("--------------------------------------------------------------------------" + strconv.FormatInt(int64(len(data)), 10))
 			target.Write(data)
 		}
 	}
@@ -330,9 +328,9 @@ func parseResponse(resp response) []byte {
 }
 
 func log(msg string, lvl int) {
-	// blank := ""
-	// for i := 0; i < lvl; i++ {
-	// 	blank += "   "
-	// }
-	//fmt.Println("GoFWBypasser:", blank, msg)
+	blank := ""
+	for i := 0; i < lvl; i++ {
+		blank += "   "
+	}
+	fmt.Println("GoFWBypasser:", blank, msg)
 }

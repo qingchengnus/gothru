@@ -174,9 +174,9 @@ func getAuthenticator(authMethod byte) bypasser.Authenticator {
 }
 
 func log(msg string, lvl int) {
-	// blank := ""
-	// for i := 0; i < lvl; i++ {
-	// 	blank += "   "
-	// }
-	//fmt.Println("GoFWBypasser:", blank, msg)
+	blank := ""
+	for i := 0; i < lvl; i++ {
+		blank += "   "
+	}
+	fmt.Println("GoFWBypasser:", blank, msg)
 }
