@@ -18,7 +18,7 @@ const (
 )
 
 const (
-	bufferSize       = aes.BlockSize
+	bufferSize       = 128
 	minRequestLength = 10
 )
 
