@@ -8,6 +8,7 @@ const (
 	AuthenticatingMethodNo               = 0x00
 	AuthenticatingMethodGSSAPI           = 0x01
 	AuthenticatingMethodUsernamePassword = 0x02
+	AuthenticatingMethodCustom           = 0x0C
 	AuthenticatingMethodNotSupported     = 0xff
 )
 
@@ -32,7 +33,7 @@ func getAuthenticatingMethod(req MethodSelectionRequest) byte {
 }
 
 func isAuthenticatingMethodSupported(method byte) bool {
-	if method == AuthenticatingMethodGSSAPI || method == AuthenticatingMethodUsernamePassword || method == AuthenticatingMethodNo {
+	if method == AuthenticatingMethodCustom || method == AuthenticatingMethodUsernamePassword || method == AuthenticatingMethodNo {
 		return true
 	} else {
 		return false

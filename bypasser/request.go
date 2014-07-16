@@ -4,15 +4,21 @@ import (
 	//"bytes"
 	"encoding/binary"
 	"errors"
-	"fmt"
+	//"fmt"
 	//"io"
+	"crypto/aes"
+	"crypto/cipher"
 	"net"
 	"strconv"
 	//"time"
 )
 
 const (
-	bufferSize       = 4096
+	reserved = 0x00
+)
+
+const (
+	bufferSize       = 512
 	minRequestLength = 10
 )
 
@@ -211,8 +217,8 @@ func buildTunnel(fromTarget, toClient *net.TCPConn) {
 	tunnelBackward := make(chan []byte)
 	errorChannelForward := make(chan error)
 	errorChannelBackward := make(chan error)
-	go handleTunnel(fromTarget, tunnelForward, tunnelBackward, errorChannelForward, errorChannelBackward)
-	go handleTunnel(toClient, tunnelBackward, tunnelForward, errorChannelBackward, errorChannelForward)
+	go handleTunnel(fromTarget, tunnelForward, tunnelBackward, errorChannelForward, errorChannelBackward, true)
+	go handleTunnel(toClient, tunnelBackward, tunnelForward, errorChannelBackward, errorChannelForward, false)
 
 	// go func() {
 	// 	for {
@@ -226,7 +232,7 @@ func buildTunnel(fromTarget, toClient *net.TCPConn) {
 	// }()
 }
 
-func handleTunnel(target *net.TCPConn, receiver <-chan []byte, sender chan<- []byte, errorChannelF <-chan error, errorChannelB chan<- error) {
+func handleTunnel(target *net.TCPConn, receiver <-chan []byte, sender chan<- []byte, errorChannelF <-chan error, errorChannelB chan<- error, shouldEncrypt bool) {
 	errChan := make(chan error)
 	dataChan := make(chan []byte)
 	go func(dch chan []byte, ech chan error) {
@@ -256,6 +262,9 @@ func handleTunnel(target *net.TCPConn, receiver <-chan []byte, sender chan<- []b
 			// dch <- buf.Bytes()
 			// return
 			buf := make([]byte, bufferSize)
+			const key16 = "1234567890123456"
+			var key = key16
+			var iv = []byte(key)[:aes.BlockSize]
 			//target.SetReadDeadline(time.Now())
 			length, err := target.Read(buf)
 			if err != nil {
@@ -265,8 +274,14 @@ func handleTunnel(target *net.TCPConn, receiver <-chan []byte, sender chan<- []b
 			} else {
 				//target.SetReadDeadline(time.Time{})
 				log(strconv.FormatInt(int64(length), 10)+" bytes of data received, sent to data channel.", 6)
+				result := make([]byte, length)
+				if shouldEncrypt {
 
-				dch <- buf[:length]
+					EncryptAESCFB(result, buf[:length], []byte(key), iv)
+				} else {
+					DecryptAESCFB(result, buf[:length], []byte(key), iv)
+				}
+				dch <- result
 			}
 
 		}
@@ -332,5 +347,24 @@ func log(msg string, lvl int) {
 	for i := 0; i < lvl; i++ {
 		blank += "   "
 	}
-	fmt.Println("GoFWBypasser:", blank, msg)
+	//fmt.Println("GoFWBypasser:", blank, msg)
+}
+func EncryptAESCFB(dst, src, key, iv []byte) error {
+	aesBlockEncrypter, err := aes.NewCipher([]byte(key))
+	if err != nil {
+		return err
+	}
+	aesEncrypter := cipher.NewCFBEncrypter(aesBlockEncrypter, iv)
+	aesEncrypter.XORKeyStream(dst, src)
+	return nil
+}
+
+func DecryptAESCFB(dst, src, key, iv []byte) error {
+	aesBlockDecrypter, err := aes.NewCipher([]byte(key))
+	if err != nil {
+		return nil
+	}
+	aesDecrypter := cipher.NewCFBDecrypter(aesBlockDecrypter, iv)
+	aesDecrypter.XORKeyStream(dst, src)
+	return nil
 }

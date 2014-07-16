@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
 	"errors"
 	"fmt"
 	"github.com/qingchengnus/gofw/bypasser"
@@ -47,17 +49,22 @@ func main() {
 func handleConnection(conn *net.TCPConn) {
 	log("A client connected.", 0)
 	status := statusMethodSelecting
+	const key16 = "1234567890123456"
+	var key = key16
+	var iv = []byte(key)[:aes.BlockSize]
 	var method byte
 	for {
-		data := make([]byte, maxPacketLength+1)
+		data := make([]byte, 1024)
 		numOfBytes, err := conn.Read(data)
+		result := make([]byte, numOfBytes)
+		DecryptAESCFB(result, data[:numOfBytes], []byte(key), iv)
 		log("Receiving data.", 1)
 		if err != nil {
 			conn.Close()
 			log("Failed to read data, connection closed.", 1)
 			return
 		}
-		packet, parseErr := parsePacket(data, numOfBytes, status)
+		packet, parseErr := parsePacket(result, numOfBytes, status)
 		if parseErr != nil {
 			log("Invalid packet, connection closed. "+parseErr.Error(), 1)
 			conn.Close()
@@ -70,7 +77,9 @@ func handleConnection(conn *net.TCPConn) {
 				log("Handling method selection request.", 2)
 				methodSelectionRequest := bypasser.FormatMethodSelectionRequest(packet)
 				methodSelectionResponse := bypasser.HandleMethodSelection(methodSelectionRequest)
-				_, err := conn.Write(bypasser.ParseMethodSelectionResponse(methodSelectionResponse))
+				result := bypasser.ParseMethodSelectionResponse(methodSelectionResponse)
+				EncryptAESCFB(result, result, []byte(key), iv)
+				_, err := conn.Write(result)
 				if err != nil {
 					conn.Close()
 					log("Fail to write response back, connection closed.", 3)
@@ -118,6 +127,7 @@ func handleConnection(conn *net.TCPConn) {
 					log(err.Error(), 3)
 					return
 				}
+				EncryptAESCFB(resp, resp, []byte(key), iv)
 				conn.Write(resp)
 				status = statusConnecting
 				//conn.Close()
@@ -179,4 +189,23 @@ func log(msg string, lvl int) {
 		blank += "   "
 	}
 	fmt.Println("GoFWBypasser:", blank, msg)
+}
+func EncryptAESCFB(dst, src, key, iv []byte) error {
+	aesBlockEncrypter, err := aes.NewCipher([]byte(key))
+	if err != nil {
+		return err
+	}
+	aesEncrypter := cipher.NewCFBEncrypter(aesBlockEncrypter, iv)
+	aesEncrypter.XORKeyStream(dst, src)
+	return nil
+}
+
+func DecryptAESCFB(dst, src, key, iv []byte) error {
+	aesBlockDecrypter, err := aes.NewCipher([]byte(key))
+	if err != nil {
+		return nil
+	}
+	aesDecrypter := cipher.NewCFBDecrypter(aesBlockDecrypter, iv)
+	aesDecrypter.XORKeyStream(dst, src)
+	return nil
 }
