@@ -23,6 +23,10 @@ const (
 )
 
 const (
+	EncryptMethodAESCFB = iota
+	EncryptMethodSimple
+)
+const (
 	commandConnect      = 0x01
 	commandBind         = 0x02
 	commandUDPAssociate = 0x03
@@ -262,9 +266,6 @@ func handleTunnel(target *net.TCPConn, receiver <-chan []byte, sender chan<- []b
 			// dch <- buf.Bytes()
 			// return
 			buf := make([]byte, bufferSize)
-			const key16 = "1234567890123456"
-			var key = key16
-			var iv = []byte(key)[:aes.BlockSize]
 			//target.SetReadDeadline(time.Now())
 			length, err := target.Read(buf)
 			if err != nil {
@@ -276,10 +277,9 @@ func handleTunnel(target *net.TCPConn, receiver <-chan []byte, sender chan<- []b
 				log(strconv.FormatInt(int64(length), 10)+" bytes of data received, sent to data channel.", 6)
 				result := make([]byte, length)
 				if shouldEncrypt {
-
-					EncryptAESCFB(result, buf[:length], []byte(key), iv)
+					Encrypt(result, buf[:length], EncryptMethodSimple)
 				} else {
-					DecryptAESCFB(result, buf[:length], []byte(key), iv)
+					Decrypt(result, buf[:length], EncryptMethodSimple)
 				}
 				dch <- result
 			}
@@ -349,7 +349,8 @@ func log(msg string, lvl int) {
 	}
 	//fmt.Println("GoFWBypasser:", blank, msg)
 }
-func EncryptAESCFB(dst, src, key, iv []byte) error {
+
+func encryptAESCFB(dst, src, key, iv []byte) error {
 	aesBlockEncrypter, err := aes.NewCipher([]byte(key))
 	if err != nil {
 		return err
@@ -359,12 +360,60 @@ func EncryptAESCFB(dst, src, key, iv []byte) error {
 	return nil
 }
 
-func DecryptAESCFB(dst, src, key, iv []byte) error {
+func decryptAESCFB(dst, src, key, iv []byte) error {
 	aesBlockDecrypter, err := aes.NewCipher([]byte(key))
 	if err != nil {
 		return nil
 	}
 	aesDecrypter := cipher.NewCFBDecrypter(aesBlockDecrypter, iv)
 	aesDecrypter.XORKeyStream(dst, src)
+	return nil
+}
+
+func Encrypt(dst, src []byte, method int) error {
+	key := "1234567890123456"
+	iv := []byte(key)[:aes.BlockSize]
+	switch method {
+	case EncryptMethodSimple:
+		{
+			return encryptSimple(dst, src)
+		}
+	case EncryptMethodAESCFB:
+		{
+			return encryptAESCFB(dst, src, []byte(key), iv)
+		}
+	default:
+		return errors.New("Unknown encryption method.")
+	}
+}
+
+func Decrypt(dst, src []byte, method int) error {
+	key := "1234567890123456"
+	iv := []byte(key)[:aes.BlockSize]
+	switch method {
+	case EncryptMethodSimple:
+		{
+			return decryptSimple(dst, src)
+		}
+	case EncryptMethodAESCFB:
+		{
+			return decryptAESCFB(dst, src, []byte(key), iv)
+		}
+	default:
+		return errors.New("Unknown encryption method.")
+	}
+}
+
+func encryptSimple(dst, src []byte) error {
+	for i := 0; i < len(src); i++ {
+		dst[i] = 0xff - src[i]
+	}
+	return nil
+}
+
+func decryptSimple(dst, src []byte) error {
+	for i := 0; i < len(src); i++ {
+		dst[i] = 0xff - src[i]
+	}
 	return nil
 }
