@@ -84,6 +84,11 @@ func HandleRequest(rqst []byte, conn *net.TCPConn) ([]byte, error) {
 			fmt.Println("Bind request received! Please implement it asap!")
 			return parseResponse(generateFailureResponse(req.version, replyCommandNotSupported)), nil
 		}
+	case commandUDPAssociate:
+		{
+			fmt.Println("UDP associate request received! Please implement it asap!")
+			return parseResponse(generateFailureResponse(req.version, replyCommandNotSupported)), nil
+		}
 	default:
 		{
 			log("Command not supported.", 3)
