@@ -4,7 +4,7 @@ import (
 	//"bytes"
 	"encoding/binary"
 	"errors"
-	//"fmt"
+	"fmt"
 	//"io"
 	"crypto/aes"
 	"crypto/cipher"
@@ -78,6 +78,11 @@ func HandleRequest(rqst []byte, conn *net.TCPConn) ([]byte, error) {
 		{
 			log("Handling command connect.", 3)
 			return parseResponse(handleConnect(req, conn)), nil
+		}
+	case commandBind:
+		{
+			fmt.Println("Bind request received! Please implement it asap!")
+			return parseResponse(generateFailureResponse(req.version, replyCommandNotSupported)), nil
 		}
 	default:
 		{
