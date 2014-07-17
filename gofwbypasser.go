@@ -2,7 +2,7 @@ package main
 
 import (
 	"errors"
-	"fmt"
+	//"fmt"
 	"github.com/qingchengnus/gofw/bypasser"
 	"net"
 )
@@ -52,9 +52,7 @@ func handleConnection(conn *net.TCPConn) {
 		data := make([]byte, maxPacketLength)
 		numOfBytes, err := conn.Read(data)
 		result := make([]byte, numOfBytes)
-		fmt.Println("Before is ", data[:numOfBytes])
 		bypasser.Decrypt(result, data[:numOfBytes], bypasser.EncryptMethodSimple)
-		fmt.Println("After is ", result)
 		log("Receiving data.", 1)
 		if err != nil {
 			conn.Close()
@@ -177,9 +175,9 @@ func getAuthenticator(authMethod byte) bypasser.Authenticator {
 }
 
 func log(msg string, lvl int) {
-	blank := ""
-	for i := 0; i < lvl; i++ {
-		blank += "   "
-	}
+	// blank := ""
+	// for i := 0; i < lvl; i++ {
+	// 	blank += "   "
+	// }
 	//fmt.Println("GoFWBypasser:", blank, msg)
 }
