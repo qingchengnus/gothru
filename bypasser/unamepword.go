@@ -6,6 +6,7 @@ import (
 
 const (
 	validationStatusSuccess = 0x00
+	validationStatusFailure = 0x01
 )
 
 type UnamePwordHandler struct {

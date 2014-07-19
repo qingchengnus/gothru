@@ -1,16 +1,10 @@
 package bypasser
 
 import (
-	//"bytes"
 	"encoding/binary"
 	"errors"
-	"fmt"
-	//"io"
-	"crypto/aes"
-	"crypto/cipher"
 	"net"
 	"strconv"
-	//"time"
 )
 
 const (
@@ -68,7 +62,7 @@ type response struct {
 	boundPort    [2]byte
 }
 
-func HandleRequest(rqst []byte, conn *net.TCPConn) ([]byte, error) {
+func HandleRequest(rqst []byte, conn *net.TCPConn, mCipher GFWCipher) ([]byte, error) {
 	req, ok := formatRequest(rqst)
 	if !ok {
 		return []byte{}, errors.New("Invalid request packet.")
@@ -76,44 +70,38 @@ func HandleRequest(rqst []byte, conn *net.TCPConn) ([]byte, error) {
 	switch req.command {
 	case commandConnect:
 		{
-			log("Handling command connect.", 3)
-			return parseResponse(handleConnect(req, conn)), nil
+			logger.Log(DEBUG, "Request to connect.")
+			return parseResponse(handleConnect(req, conn, mCipher)), nil
 		}
 	case commandBind:
 		{
-			fmt.Println("Bind request received! Please implement it asap!")
 			return parseResponse(generateFailureResponse(req.version, replyCommandNotSupported)), nil
 		}
 	case commandUDPAssociate:
 		{
-			fmt.Println("UDP associate request received! Please implement it asap!")
 			return parseResponse(generateFailureResponse(req.version, replyCommandNotSupported)), nil
 		}
 	default:
 		{
-			log("Command not supported.", 3)
 			return parseResponse(generateFailureResponse(req.version, replyCommandNotSupported)), nil
 		}
 	}
 }
 
-func handleConnect(req request, conn *net.TCPConn) response {
+func handleConnect(req request, conn *net.TCPConn, cipher GFWCipher) response {
 	switch req.addressType {
 	case addressTypeIPv4:
 		{
-			log("Address type is IPv4, start connecting.", 4)
-			return startTcpConnectSession(req.version, req.destinationAddress, addressTypeIPv4, req.destinationPort, conn)
+			logger.Log(DEBUG, "REQUEST TO IPv4.")
+			return startTcpConnectSession(req.version, req.destinationAddress, addressTypeIPv4, req.destinationPort, conn, cipher)
 		}
 	case addressTypeDomainName:
 		{
-			log("Address type is Domain name, start connecting.", 4)
-			//log("Requested domain name is: "+string(req.destinationAddress[1:]), 4)
-			//return generateFailureResponse(req.version, replyAddressTypeNotSupported)
-			return startTcpConnectSession(req.version, req.destinationAddress, addressTypeDomainName, req.destinationPort, conn)
+			logger.Log(INFO, "REQUEST TO "+string(req.destinationAddress))
+			return startTcpConnectSession(req.version, req.destinationAddress, addressTypeDomainName, req.destinationPort, conn, cipher)
 		}
 	default:
 		{
-			log("Address type is not supported: "+strconv.Itoa(int(req.addressType)), 4)
 			return generateFailureResponse(req.version, replyAddressTypeNotSupported)
 		}
 	}
@@ -123,40 +111,34 @@ func generateFailureResponse(version byte, reply byte) response {
 	return response{version, reply, reserved, 0, []byte{}, [2]byte{0, 0}}
 }
 
-func startTcpConnectSession(version byte, addr []byte, addrType byte, port [2]byte, conn *net.TCPConn) response {
+func startTcpConnectSession(version byte, addr []byte, addrType byte, port [2]byte, conn *net.TCPConn, cipher GFWCipher) response {
 	var addrString string
 	if addrType == addressTypeDomainName {
 		addrString = string(addr[1:])
 	} else {
 		addrString = net.IP(addr).String()
 	}
-	log("Start to resolve the address: "+addrString+":"+formatPort(port), 5)
 	targetAddr, err := net.ResolveTCPAddr("tcp", addrString+":"+formatPort(port))
 	if err != nil {
-		log("Fail to resolve tcp address.", 5)
 		resp := generateFailureResponse(version, replyGeneralSOCKSServerFailure)
 		return resp
 	}
 	connToTarget, err := net.DialTCP("tcp", nil, targetAddr)
 	if err != nil {
-		log("Failed to connect to the target.", 5)
 		resp := generateFailureResponse(version, replyHostUnreachable)
 		return resp
 	} else {
-		log("Connected to target.", 5)
 		ipAddr, portNumber, _ := net.SplitHostPort(connToTarget.LocalAddr().String())
 		ipAddrBytes := net.ParseIP(ipAddr)
 		var addrType byte
 		if ipAddrBytes.To4() != nil {
-			log("Bound ip address is an IPv4 address", 5)
 			ipAddrBytes = ipAddrBytes.To4()
 			addrType = addressTypeIPv4
 		} else {
-			log("Bound ip address is an IPv6 address", 5)
 			addrType = addressTypeIPv6
 		}
-		log("Bound port is: "+portNumber, 5)
-		go buildTunnel(connToTarget, conn)
+		logger.Log(DEBUG, "Building tunnel.")
+		go buildTunnel(connToTarget, conn, cipher)
 		return response{version, replySucceeded, reserved, addrType, ipAddrBytes, parsePort(portNumber)}
 		// localAddr, _ := net.ResolveTCPAddr("tcp", ":0")
 		// ln, err := net.ListenTCP("tcp", localAddr)
@@ -209,30 +191,13 @@ func startTcpConnectSession(version byte, addr []byte, addrType byte, port [2]by
 // 	}
 // }
 
-func buildTunnel(fromTarget, toClient *net.TCPConn) {
-	// defer fromTarget.Close()
-
-	// if _, err := fromTarget.Write(buf.Bytes()); err != nil {
-	// 	panic(err)
-	// }
-
-	// data := make([]byte, 1024)
-	// n, err := fromTarget.Read(data)
-	// if err != nil {
-	// 	if err != io.EOF {
-	// 		panic(err)
-	// 	} else {
-	// 		toClient.Write(data[:n])
-
-	// 	}
-	// }
-	// toClient.Close()
+func buildTunnel(fromTarget, toClient *net.TCPConn, cipher GFWCipher) {
 	tunnelForward := make(chan []byte)
 	tunnelBackward := make(chan []byte)
 	errorChannelForward := make(chan error)
 	errorChannelBackward := make(chan error)
-	go handleTunnel(fromTarget, tunnelForward, tunnelBackward, errorChannelForward, errorChannelBackward, true)
-	go handleTunnel(toClient, tunnelBackward, tunnelForward, errorChannelBackward, errorChannelForward, false)
+	go handleTunnel(fromTarget, tunnelForward, tunnelBackward, errorChannelForward, errorChannelBackward, true, cipher)
+	go handleTunnel(toClient, tunnelBackward, tunnelForward, errorChannelBackward, errorChannelForward, false, cipher)
 
 	// go func() {
 	// 	for {
@@ -246,52 +211,26 @@ func buildTunnel(fromTarget, toClient *net.TCPConn) {
 	// }()
 }
 
-func handleTunnel(target *net.TCPConn, receiver <-chan []byte, sender chan<- []byte, errorChannelF <-chan error, errorChannelB chan<- error, shouldEncrypt bool) {
+func handleTunnel(target *net.TCPConn, receiver <-chan []byte, sender chan<- []byte, errorChannelF <-chan error, errorChannelB chan<- error, shouldEncrypt bool, cipher GFWCipher) {
 	errChan := make(chan error)
 	dataChan := make(chan []byte)
 	go func(dch chan []byte, ech chan error) {
 		for {
-			// buf := &bytes.Buffer{}
-			// for {
-			// 	data := make([]byte, 256)
-			// 	n, err := target.Read(data)
-			// 	if err != nil {
-			// 		if err == io.EOF {
-			// 			log("End of file encountered: "+err.Error(), 6)
-			// 			break
-			// 		} else {
-			// 			log("Other error encountered: "+err.Error(), 6)
-			// 			ech <- err
-			// 			return
-			// 		}
-
-			// 	}
-			// 	buf.Write(data[:n])
-			// 	errChan <- errors.New("")
-			// 	if data[n-2] == 13 && data[n-1] == 10 {
-			// 		log("End of file encountered.", 6)
-			// 		break
-			// 	}
-			// }
-			// dch <- buf.Bytes()
-			// return
 			buf := make([]byte, bufferSize)
 			//target.SetReadDeadline(time.Now())
 			length, err := target.Read(buf)
 			if err != nil {
-				log("Error encountered: "+err.Error(), 6)
 				ech <- err
 				return
 			} else {
-				//target.SetReadDeadline(time.Time{})
-				log(strconv.FormatInt(int64(length), 10)+" bytes of data received, sent to data channel.", 6)
-				result := make([]byte, length)
-				if shouldEncrypt {
-					Encrypt(result, buf[:length], EncryptMethodSimple)
-				} else {
-					Decrypt(result, buf[:length], EncryptMethodSimple)
+				if cipher != nil {
+					if shouldEncrypt {
+						cipher.Encrypt(buf[:length], buf[:length])
+					} else {
+						cipher.Decrypt(buf[:length], buf[:length])
+					}
 				}
-				dch <- result
+				dch <- buf[:length]
 			}
 
 		}
@@ -300,23 +239,15 @@ func handleTunnel(target *net.TCPConn, receiver <-chan []byte, sender chan<- []b
 	for {
 		select {
 		case data := <-dataChan:
-			//log("Data received: "+string(data), 6)
-			log("Data received from data channel, pass it to sender.", 6)
 			sender <- data
 		case err := <-errChan:
-			// handle our error then exit for loop
-			log("Error received from error channel: "+err.Error()+", notify the other routine to stop.", 6)
 			errorChannelB <- err
-			log("Tunnel ended.", 6)
 			target.Close()
 			return
-		case err := <-errorChannelF:
-			log("Error received from the other routine: "+err.Error()+", closing the connection.", 6)
-			log("Tunnel ended.", 6)
+		case <-errorChannelF:
 			target.Close()
 			return
 		case data := <-receiver:
-			log("Data received from receiver.", 6)
 			target.Write(data)
 		}
 	}
@@ -352,78 +283,70 @@ func parseResponse(resp response) []byte {
 	return append(append([]byte{resp.version, resp.reply, resp.rsv, resp.addressType}, resp.boundAddress...), resp.boundPort[:]...)
 }
 
-func log(msg string, lvl int) {
-	blank := ""
-	for i := 0; i < lvl; i++ {
-		blank += "   "
-	}
-	//fmt.Println("GoFWBypasser:", blank, msg)
-}
+// func encryptAESCFB(dst, src, key, iv []byte) error {
+// 	aesBlockEncrypter, err := aes.NewCipher([]byte(key))
+// 	if err != nil {
+// 		return err
+// 	}
+// 	aesEncrypter := cipher.NewCFBEncrypter(aesBlockEncrypter, iv)
+// 	aesEncrypter.XORKeyStream(dst, src)
+// 	return nil
+// }
 
-func encryptAESCFB(dst, src, key, iv []byte) error {
-	aesBlockEncrypter, err := aes.NewCipher([]byte(key))
-	if err != nil {
-		return err
-	}
-	aesEncrypter := cipher.NewCFBEncrypter(aesBlockEncrypter, iv)
-	aesEncrypter.XORKeyStream(dst, src)
-	return nil
-}
+// func decryptAESCFB(dst, src, key, iv []byte) error {
+// 	aesBlockDecrypter, err := aes.NewCipher([]byte(key))
+// 	if err != nil {
+// 		return nil
+// 	}
+// 	aesDecrypter := cipher.NewCFBDecrypter(aesBlockDecrypter, iv)
+// 	aesDecrypter.XORKeyStream(dst, src)
+// 	return nil
+// }
 
-func decryptAESCFB(dst, src, key, iv []byte) error {
-	aesBlockDecrypter, err := aes.NewCipher([]byte(key))
-	if err != nil {
-		return nil
-	}
-	aesDecrypter := cipher.NewCFBDecrypter(aesBlockDecrypter, iv)
-	aesDecrypter.XORKeyStream(dst, src)
-	return nil
-}
+// func Encrypt(dst, src []byte, method int) error {
+// 	key := "1234567890123456"
+// 	iv := []byte(key)[:aes.BlockSize]
+// 	switch method {
+// 	case EncryptMethodSimple:
+// 		{
+// 			return encryptSimple(dst, src)
+// 		}
+// 	case EncryptMethodAESCFB:
+// 		{
+// 			return encryptAESCFB(dst, src, []byte(key), iv)
+// 		}
+// 	default:
+// 		return errors.New("Unknown encryption method.")
+// 	}
+// }
 
-func Encrypt(dst, src []byte, method int) error {
-	key := "1234567890123456"
-	iv := []byte(key)[:aes.BlockSize]
-	switch method {
-	case EncryptMethodSimple:
-		{
-			return encryptSimple(dst, src)
-		}
-	case EncryptMethodAESCFB:
-		{
-			return encryptAESCFB(dst, src, []byte(key), iv)
-		}
-	default:
-		return errors.New("Unknown encryption method.")
-	}
-}
+// func Decrypt(dst, src []byte, method int) error {
+// 	key := "1234567890123456"
+// 	iv := []byte(key)[:aes.BlockSize]
+// 	switch method {
+// 	case EncryptMethodSimple:
+// 		{
+// 			return decryptSimple(dst, src)
+// 		}
+// 	case EncryptMethodAESCFB:
+// 		{
+// 			return decryptAESCFB(dst, src, []byte(key), iv)
+// 		}
+// 	default:
+// 		return errors.New("Unknown encryption method.")
+// 	}
+// }
 
-func Decrypt(dst, src []byte, method int) error {
-	key := "1234567890123456"
-	iv := []byte(key)[:aes.BlockSize]
-	switch method {
-	case EncryptMethodSimple:
-		{
-			return decryptSimple(dst, src)
-		}
-	case EncryptMethodAESCFB:
-		{
-			return decryptAESCFB(dst, src, []byte(key), iv)
-		}
-	default:
-		return errors.New("Unknown encryption method.")
-	}
-}
+// func encryptSimple(dst, src []byte) error {
+// 	for i := 0; i < len(src); i++ {
+// 		dst[i] = 0xff - src[i]
+// 	}
+// 	return nil
+// }
 
-func encryptSimple(dst, src []byte) error {
-	for i := 0; i < len(src); i++ {
-		dst[i] = 0xff - src[i]
-	}
-	return nil
-}
-
-func decryptSimple(dst, src []byte) error {
-	for i := 0; i < len(src); i++ {
-		dst[i] = 0xff - src[i]
-	}
-	return nil
-}
+// func decryptSimple(dst, src []byte) error {
+// 	for i := 0; i < len(src); i++ {
+// 		dst[i] = 0xff - src[i]
+// 	}
+// 	return nil
+// }
