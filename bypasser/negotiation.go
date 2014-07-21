@@ -224,7 +224,7 @@ func HandleConnectionNegotiationClient(conn *net.TCPConn, serverAddr *net.TCPAdd
 					}
 					logger.Log(DEBUG, "Auth succeeded.")
 					//mCipher = NewShiftCipher(authResp.key[0])
-					mCipher, _ = NewCTRCipher(authResp.key, authResp.initialVector)
+					mCipher, _ = NewAESCTRCipher(authResp.key, authResp.initialVector)
 					status = statusRequesting
 
 					_, err = conn.Write([]byte{0x05, 0x00})
