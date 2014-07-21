@@ -31,13 +31,13 @@ const (
 	SHIFTKEY  = 0x05
 )
 
-func (c CustomAuthenticator) HandleAuthentication(packet []byte) ([]byte, GFWCipher, bool, error) {
+func (c CustomAuthenticator) HandleAuthentication(packet []byte, legalUsers map[string]string) ([]byte, GFWCipher, bool, error) {
 	req, ok := formatCustomAuthRequest(packet)
 	if !ok {
 		return []byte{}, nil, false, errors.New("Invalid username/password packet.")
 	}
 
-	result := validateCustomCredentials(req)
+	result := validateCustomCredentials(req, legalUsers)
 	if result {
 		if req.cipherType == CipherTypeSimple {
 			resp := customAuthResponse{req.version, validationStatusSuccess, []byte{SHIFTKEY}, []byte{}}
@@ -75,6 +75,25 @@ func formatCustomAuthRequest(req []byte) (customAuthRequest, bool) {
 	}
 }
 
+func formatCustomAuthResponse(resp []byte) customAuthResponse {
+	result := customAuthResponse{}
+	result.version = resp[0]
+	result.status = resp[1]
+	result.key = resp[3 : 3+int(resp[2])]
+	result.initialVector = resp[4+int(resp[2]):]
+	return result
+}
+
+func parseCustomAuthRequest(req customAuthRequest) []byte {
+	result := []byte{req.version}
+	result = append(result, byte(len(req.username)))
+	result = append(result, req.username...)
+	result = append(result, byte(len(req.password)))
+	result = append(result, req.password...)
+	result = append(result, req.cipherType)
+	return result
+}
+
 func validateCustomAuthRequest(req []byte) bool {
 	if len(req) < 6 {
 		return false
@@ -88,6 +107,11 @@ func validateCustomAuthRequest(req []byte) bool {
 	}
 }
 
-func validateCustomCredentials(req customAuthRequest) bool {
-	return true
+func validateCustomCredentials(req customAuthRequest, legalUsers map[string]string) bool {
+	pword, ok := legalUsers[string(req.username)]
+	if !ok {
+		return false
+	} else {
+		return pword == string(req.password)
+	}
 }

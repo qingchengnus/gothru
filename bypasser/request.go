@@ -62,7 +62,7 @@ type response struct {
 	boundPort    [2]byte
 }
 
-func HandleRequest(rqst []byte, conn *net.TCPConn, mCipher GFWCipher) ([]byte, error) {
+func HandleRequestServer(rqst []byte, conn *net.TCPConn, mCipher GFWCipher) ([]byte, error) {
 	req, ok := formatRequest(rqst)
 	if !ok {
 		return []byte{}, errors.New("Invalid request packet.")
@@ -86,6 +86,39 @@ func HandleRequest(rqst []byte, conn *net.TCPConn, mCipher GFWCipher) ([]byte, e
 			return parseResponse(generateFailureResponse(req.version, replyCommandNotSupported)), nil
 		}
 	}
+}
+
+func HandleRequestClient(rqst []byte, conn, connToServer *net.TCPConn, mCipher GFWCipher) {
+	_, err := connToServer.Write(rqst)
+	if err != nil {
+		logger.Log(ERROR, "Connection closed due to failure to write to server: "+err.Error())
+		connToServer.Close()
+		conn.Close()
+		return
+	}
+	resp := make([]byte, maxPacketLength)
+	size, err := connToServer.Read(resp)
+	if err != nil {
+		logger.Log(ERROR, "Connection closed due to failure to read from server: "+err.Error())
+		connToServer.Close()
+		conn.Close()
+		return
+	}
+	_, err = conn.Write(resp[:size])
+	if err != nil {
+		logger.Log(ERROR, "Connection closed due to failure to write to client: "+err.Error())
+		connToServer.Close()
+		conn.Close()
+		return
+	}
+
+	if resp[1] == replySucceeded {
+		buildTunnel(conn, connToServer, mCipher)
+	} else {
+		connToServer.Close()
+		conn.Close()
+	}
+
 }
 
 func handleConnect(req request, conn *net.TCPConn, cipher GFWCipher) response {
