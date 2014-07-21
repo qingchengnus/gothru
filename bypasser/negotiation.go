@@ -40,6 +40,7 @@ var logger *GFWLogger = NewLogger(os.Stdout, []string{"INFO", "DEBUG", "ERROR"})
 func HandleConnectionNegotiationServer(conn *net.TCPConn, users map[string]string) {
 	logger.DisableTag(DEBUG)
 	logger.DisableTag(ERROR)
+	logger.DisableTag(INFO)
 	logger.Log(DEBUG, "A new client connected.")
 	status := statusMethodSelecting
 	var method byte
@@ -134,8 +135,8 @@ func HandleConnectionNegotiationServer(conn *net.TCPConn, users map[string]strin
 }
 
 func HandleConnectionNegotiationClient(conn *net.TCPConn, serverAddr *net.TCPAddr, uname, pword string) {
-	// logger.DisableTag(DEBUG)
-	// logger.DisableTag(ERROR)
+	logger.DisableTag(DEBUG)
+	logger.DisableTag(ERROR)
 	logger.Log(DEBUG, "A new client connected.")
 
 	connToServer, err := net.DialTCP("tcp", nil, serverAddr)
