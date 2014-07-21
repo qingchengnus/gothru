@@ -1,6 +1,8 @@
 package bypasser
 
 import (
+	"crypto/aes"
+	"crypto/rand"
 	"errors"
 )
 
@@ -27,7 +29,7 @@ type CustomAuthenticator struct {
 }
 
 const (
-	AES256KEY = ""
+	AES256KEY = "Champion of the International 4!"
 	SHIFTKEY  = 0x05
 )
 
@@ -42,6 +44,16 @@ func (c CustomAuthenticator) HandleAuthentication(packet []byte, legalUsers map[
 		if req.cipherType == CipherTypeSimple {
 			resp := customAuthResponse{req.version, validationStatusSuccess, []byte{SHIFTKEY}, []byte{}}
 			return parseCustomAuthResponse(resp), NewShiftCipher(SHIFTKEY), true, nil
+		} else if req.cipherType == CipherTypeAES256 {
+			initialVector := make([]byte, aes.BlockSize)
+			rand.Read(initialVector)
+			mCipher, err := NewAESCTRCipher([]byte(AES256KEY), initialVector)
+			if err != nil {
+				return []byte{}, nil, false, errors.New("Failed to generate AESCTRCipher.")
+			}
+			resp := customAuthResponse{req.version, validationStatusSuccess, []byte(AES256KEY), initialVector}
+
+			return parseCustomAuthResponse(resp), mCipher, true, nil
 		} else {
 			return []byte{}, nil, false, errors.New("Unknown cryption method.")
 		}

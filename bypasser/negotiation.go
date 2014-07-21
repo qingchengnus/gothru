@@ -2,7 +2,6 @@ package bypasser
 
 import (
 	"errors"
-	"fmt"
 	"net"
 	"os"
 )
@@ -39,6 +38,8 @@ type Authenticator interface {
 var logger *GFWLogger = NewLogger(os.Stdout, []string{"INFO", "DEBUG", "ERROR"})
 
 func HandleConnectionNegotiationServer(conn *net.TCPConn, users map[string]string) {
+	logger.DisableTag(DEBUG)
+	logger.DisableTag(ERROR)
 	logger.Log(DEBUG, "A new client connected.")
 	status := statusMethodSelecting
 	var method byte
@@ -51,7 +52,6 @@ func HandleConnectionNegotiationServer(conn *net.TCPConn, users map[string]strin
 			conn.Close()
 			return
 		}
-		fmt.Println(data[:numOfBytes])
 		packet, parseErr := parsePacket(data[:numOfBytes], status)
 		if parseErr != nil {
 			logger.Log(ERROR, "Connection closed due to invalid packet: "+parseErr.Error())
@@ -65,7 +65,6 @@ func HandleConnectionNegotiationServer(conn *net.TCPConn, users map[string]strin
 				logger.Log(DEBUG, "Handling method selection request.")
 				var result []byte
 				result, method = HandleMethodSelectionServer(packet)
-				fmt.Println(result)
 				_, err := conn.Write(result)
 				if err != nil {
 					logger.Log(ERROR, "Connection closed due to failure to write response: "+err.Error())
@@ -135,8 +134,8 @@ func HandleConnectionNegotiationServer(conn *net.TCPConn, users map[string]strin
 }
 
 func HandleConnectionNegotiationClient(conn *net.TCPConn, serverAddr *net.TCPAddr, uname, pword string) {
-	logger.DisableTag(DEBUG)
-	logger.DisableTag(ERROR)
+	// logger.DisableTag(DEBUG)
+	// logger.DisableTag(ERROR)
 	logger.Log(DEBUG, "A new client connected.")
 
 	connToServer, err := net.DialTCP("tcp", nil, serverAddr)
@@ -197,7 +196,7 @@ func HandleConnectionNegotiationClient(conn *net.TCPConn, serverAddr *net.TCPAdd
 					return
 				} else if method == AuthenticatingMethodCustom {
 					logger.Log(DEBUG, "Selected method is custom.")
-					customReq := customAuthRequest{0x05, []byte(uname), []byte(pword), CipherTypeSimple}
+					customReq := customAuthRequest{0x05, []byte(uname), []byte(pword), CipherTypeAES256}
 					packet := parseCustomAuthRequest(customReq)
 					_, err := connToServer.Write(packet)
 					if err != nil {
@@ -224,8 +223,8 @@ func HandleConnectionNegotiationClient(conn *net.TCPConn, serverAddr *net.TCPAdd
 						return
 					}
 					logger.Log(DEBUG, "Auth succeeded.")
-					mCipher = NewShiftCipher(authResp.key[0])
-
+					//mCipher = NewShiftCipher(authResp.key[0])
+					mCipher, _ = NewCTRCipher(authResp.key, authResp.initialVector)
 					status = statusRequesting
 
 					_, err = conn.Write([]byte{0x05, 0x00})

@@ -86,7 +86,6 @@ func main() {
 
 	if server {
 		serverPort, users, err := parseServerConfigFile(realConfigFilePath)
-		fmt.Println(users)
 		if err != nil {
 			fmt.Println(loadingConfigFileError + err.Error())
 			return

@@ -17,10 +17,6 @@ const (
 )
 
 const (
-	EncryptMethodAESCFB = iota
-	EncryptMethodSimple
-)
-const (
 	commandConnect      = 0x01
 	commandBind         = 0x02
 	commandUDPAssociate = 0x03
@@ -315,71 +311,3 @@ func parseResponse(resp response) []byte {
 	//return []byte{resp.version, resp.reply, resp.rsv, resp.addressType, 0, 0, 0, 0, 0, 0}
 	return append(append([]byte{resp.version, resp.reply, resp.rsv, resp.addressType}, resp.boundAddress...), resp.boundPort[:]...)
 }
-
-// func encryptAESCFB(dst, src, key, iv []byte) error {
-// 	aesBlockEncrypter, err := aes.NewCipher([]byte(key))
-// 	if err != nil {
-// 		return err
-// 	}
-// 	aesEncrypter := cipher.NewCFBEncrypter(aesBlockEncrypter, iv)
-// 	aesEncrypter.XORKeyStream(dst, src)
-// 	return nil
-// }
-
-// func decryptAESCFB(dst, src, key, iv []byte) error {
-// 	aesBlockDecrypter, err := aes.NewCipher([]byte(key))
-// 	if err != nil {
-// 		return nil
-// 	}
-// 	aesDecrypter := cipher.NewCFBDecrypter(aesBlockDecrypter, iv)
-// 	aesDecrypter.XORKeyStream(dst, src)
-// 	return nil
-// }
-
-// func Encrypt(dst, src []byte, method int) error {
-// 	key := "1234567890123456"
-// 	iv := []byte(key)[:aes.BlockSize]
-// 	switch method {
-// 	case EncryptMethodSimple:
-// 		{
-// 			return encryptSimple(dst, src)
-// 		}
-// 	case EncryptMethodAESCFB:
-// 		{
-// 			return encryptAESCFB(dst, src, []byte(key), iv)
-// 		}
-// 	default:
-// 		return errors.New("Unknown encryption method.")
-// 	}
-// }
-
-// func Decrypt(dst, src []byte, method int) error {
-// 	key := "1234567890123456"
-// 	iv := []byte(key)[:aes.BlockSize]
-// 	switch method {
-// 	case EncryptMethodSimple:
-// 		{
-// 			return decryptSimple(dst, src)
-// 		}
-// 	case EncryptMethodAESCFB:
-// 		{
-// 			return decryptAESCFB(dst, src, []byte(key), iv)
-// 		}
-// 	default:
-// 		return errors.New("Unknown encryption method.")
-// 	}
-// }
-
-// func encryptSimple(dst, src []byte) error {
-// 	for i := 0; i < len(src); i++ {
-// 		dst[i] = 0xff - src[i]
-// 	}
-// 	return nil
-// }
-
-// func decryptSimple(dst, src []byte) error {
-// 	for i := 0; i < len(src); i++ {
-// 		dst[i] = 0xff - src[i]
-// 	}
-// 	return nil
-// }
