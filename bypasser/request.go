@@ -129,6 +129,7 @@ func HandleRequestClient(rqst []byte, conn, connToServer *net.TCPConn, mCipher G
 		logger.Log(INFO, method+address)
 
 	}
+	mCipher.Encrypt(rqst, rqst)
 	_, err := connToServer.Write(rqst)
 	if err != nil {
 		logger.Log(ERROR, "Connection closed due to failure to write to server: "+err.Error())

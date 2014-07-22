@@ -59,6 +59,9 @@ func HandleConnectionNegotiationServer(conn *net.TCPConn, users map[string]strin
 			conn.Close()
 			return
 		}
+		if status == statusRequesting {
+			mCipher.Decrypt(data[:numOfBytes], data[:numOfBytes])
+		}
 		packet, parseErr := parsePacket(data[:numOfBytes], status)
 		if parseErr != nil {
 			logger.Log(ERROR, "Connection closed due to invalid packet: "+parseErr.Error())
