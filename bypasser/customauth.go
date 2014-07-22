@@ -1,7 +1,7 @@
 package bypasser
 
 import (
-	"crypto/aes"
+	"crypto/des"
 	"crypto/rand"
 	"errors"
 )
@@ -29,8 +29,11 @@ type CustomAuthenticator struct {
 }
 
 const (
-	AES256KEY = "Champion of the International 4!"
-	SHIFTKEY  = 0x05
+	AES256KEY = "Internat"
+)
+
+const (
+	CipherTypeInUse = CipherTypeSimple
 )
 
 func (c CustomAuthenticator) HandleAuthentication(packet []byte, legalUsers map[string]string) ([]byte, GFWCipher, bool, error) {
@@ -42,14 +45,16 @@ func (c CustomAuthenticator) HandleAuthentication(packet []byte, legalUsers map[
 	result := validateCustomCredentials(req, legalUsers)
 	if result {
 		if req.cipherType == CipherTypeSimple {
-			resp := customAuthResponse{req.version, validationStatusSuccess, []byte{SHIFTKEY}, []byte{}}
-			return parseCustomAuthResponse(resp), NewShiftCipher(SHIFTKEY), true, nil
+			randomKey := make([]byte, 1)
+			rand.Read(randomKey)
+			resp := customAuthResponse{req.version, validationStatusSuccess, randomKey, []byte{}}
+			return parseCustomAuthResponse(resp), NewShiftCipher(randomKey[0]), true, nil
 		} else if req.cipherType == CipherTypeAES256 {
-			initialVector := make([]byte, aes.BlockSize)
+			initialVector := make([]byte, des.BlockSize)
 			rand.Read(initialVector)
 			mCipher, err := NewAESCTRCipher([]byte(AES256KEY), initialVector)
 			if err != nil {
-				return []byte{}, nil, false, errors.New("Failed to generate AESCTRCipher.")
+				return []byte{}, nil, false, errors.New("Failed to generate AESCTRCipher." + err.Error())
 			}
 			resp := customAuthResponse{req.version, validationStatusSuccess, []byte(AES256KEY), initialVector}
 

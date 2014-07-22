@@ -1,8 +1,8 @@
 package bypasser
 
 import (
-	"crypto/aes"
 	"crypto/cipher"
+	"crypto/des"
 )
 
 type aESCTRCipher struct {
@@ -11,7 +11,7 @@ type aESCTRCipher struct {
 }
 
 func NewAESCTRCipher(key []byte, initialVector []byte) (aESCTRCipher, error) {
-	aesBlockEncrypter, err := aes.NewCipher([]byte(key))
+	aesBlockEncrypter, err := des.NewCipher([]byte(key))
 	if err != nil {
 		return aESCTRCipher{}, err
 	} else {

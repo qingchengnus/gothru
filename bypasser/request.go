@@ -12,7 +12,7 @@ const (
 )
 
 const (
-	bufferSize       = 4096
+	bufferSize       = 2048
 	minRequestLength = 10
 )
 

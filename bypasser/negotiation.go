@@ -197,7 +197,7 @@ func HandleConnectionNegotiationClient(conn *net.TCPConn, serverAddr *net.TCPAdd
 					return
 				} else if method == AuthenticatingMethodCustom {
 					logger.Log(DEBUG, "Selected method is custom.")
-					customReq := customAuthRequest{0x05, []byte(uname), []byte(pword), CipherTypeAES256}
+					customReq := customAuthRequest{0x05, []byte(uname), []byte(pword), CipherTypeInUse}
 					packet := parseCustomAuthRequest(customReq)
 					_, err := connToServer.Write(packet)
 					if err != nil {
@@ -225,7 +225,12 @@ func HandleConnectionNegotiationClient(conn *net.TCPConn, serverAddr *net.TCPAdd
 					}
 					logger.Log(DEBUG, "Auth succeeded.")
 					//mCipher = NewShiftCipher(authResp.key[0])
-					mCipher, _ = NewAESCTRCipher(authResp.key, authResp.initialVector)
+					if CipherTypeInUse == CipherTypeAES256 {
+						mCipher, _ = NewAESCTRCipher(authResp.key, authResp.initialVector)
+					} else {
+						mCipher = NewShiftCipher(authResp.key[0])
+					}
+
 					status = statusRequesting
 
 					_, err = conn.Write([]byte{0x05, 0x00})
