@@ -5,7 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/qingchengnus/gofw/bypasser"
+	"github.com/qingchengnus/gothru/bypasser"
 	"net"
 	"os"
 	"path/filepath"
