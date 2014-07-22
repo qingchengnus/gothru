@@ -32,12 +32,17 @@ const (
 )
 
 type Authenticator interface {
-	HandleAuthentication(packet []byte, legalUsers map[string]string) ([]byte, GFWCipher, bool, error)
+	HandleAuthentication(packet []byte, legalUsers map[string]string) ([]byte, GFWCipher, string, bool, error)
+}
+
+type DataUsage struct {
+	Username string
+	DataUsed int64
 }
 
 var logger *GFWLogger = NewLogger(os.Stdout, []string{"INFO", "DEBUG", "ERROR"})
 
-func HandleConnectionNegotiationServer(conn *net.TCPConn, users map[string]string) {
+func HandleConnectionNegotiationServer(conn *net.TCPConn, users map[string]string, udata chan DataUsage) {
 	logger.DisableTag(DEBUG)
 	logger.DisableTag(ERROR)
 	logger.DisableTag(INFO)
@@ -45,6 +50,7 @@ func HandleConnectionNegotiationServer(conn *net.TCPConn, users map[string]strin
 	status := statusMethodSelecting
 	var method byte
 	var mCipher GFWCipher
+	var currentUname string
 	for {
 		data := make([]byte, maxPacketLength)
 		numOfBytes, err := conn.Read(data)
@@ -92,7 +98,8 @@ func HandleConnectionNegotiationServer(conn *net.TCPConn, users map[string]strin
 			{
 				logger.Log(DEBUG, "Handling authentication request.")
 				authenticator := getAuthenticator(method)
-				resp, futureCipher, ok, err := authenticator.HandleAuthentication(packet, users)
+				resp, futureCipher, username, ok, err := authenticator.HandleAuthentication(packet, users)
+				currentUname = username
 				mCipher = futureCipher
 				if err != nil {
 					logger.Log(ERROR, "Connection closed due to authentication error: "+err.Error())
@@ -115,7 +122,7 @@ func HandleConnectionNegotiationServer(conn *net.TCPConn, users map[string]strin
 		case statusRequesting:
 			{
 				logger.Log(DEBUG, "Handling request.")
-				resp, err := HandleRequestServer(packet, conn, mCipher)
+				resp, err := HandleRequestServer(packet, conn, mCipher, currentUname, udata)
 				if err != nil {
 					logger.Log(ERROR, "Connection closed due to HandleRequest error: "+err.Error())
 					conn.Close()
@@ -218,7 +225,7 @@ func HandleConnectionNegotiationClient(conn *net.TCPConn, serverAddr *net.TCPAdd
 
 					authResp := formatCustomAuthResponse(resp[:size])
 					if authResp.status != validationStatusSuccess {
-						logger.Log(DEBUG, "Connection closed due to incorrect credentials.")
+						logger.Log(INFO, "Connection closed due to incorrect credentials or your data usage has exceeded the threshold set by the admin.")
 						connToServer.Close()
 						conn.Close()
 						return

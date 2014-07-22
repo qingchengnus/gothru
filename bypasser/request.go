@@ -58,7 +58,7 @@ type response struct {
 	boundPort    [2]byte
 }
 
-func HandleRequestServer(rqst []byte, conn *net.TCPConn, mCipher GFWCipher) ([]byte, error) {
+func HandleRequestServer(rqst []byte, conn *net.TCPConn, mCipher GFWCipher, username string, udata chan DataUsage) ([]byte, error) {
 	req, ok := formatRequest(rqst)
 	if !ok {
 		return []byte{}, errors.New("Invalid request packet.")
@@ -67,7 +67,7 @@ func HandleRequestServer(rqst []byte, conn *net.TCPConn, mCipher GFWCipher) ([]b
 	case commandConnect:
 		{
 			logger.Log(DEBUG, "Request to connect.")
-			return parseResponse(handleConnect(req, conn, mCipher)), nil
+			return parseResponse(handleConnect(req, conn, mCipher, username, udata)), nil
 		}
 	case commandBind:
 		{
@@ -85,6 +85,50 @@ func HandleRequestServer(rqst []byte, conn *net.TCPConn, mCipher GFWCipher) ([]b
 }
 
 func HandleRequestClient(rqst []byte, conn, connToServer *net.TCPConn, mCipher GFWCipher) {
+	req, ok := formatRequest(rqst)
+	if ok {
+		var method string
+		var address string
+		switch req.command {
+		case commandConnect:
+			{
+				method = "CONNECT "
+			}
+		case commandBind:
+			{
+				method = "BIND "
+			}
+		case commandUDPAssociate:
+			{
+				method = "UDPASSOCIATE "
+			}
+		default:
+			{
+				method = "UNKNOWN "
+			}
+		}
+		switch req.addressType {
+		case addressTypeIPv4:
+			{
+				address = net.IP(req.destinationAddress).String()
+			}
+		case addressTypeIPv6:
+			{
+				address = net.IP(req.destinationAddress).String()
+			}
+		case addressTypeDomainName:
+			{
+				address = string(req.destinationAddress[1:]) + ":" + formatPort(req.destinationPort)
+			}
+		default:
+			{
+				address = "unknown address type."
+			}
+		}
+
+		logger.Log(INFO, method+address)
+
+	}
 	_, err := connToServer.Write(rqst)
 	if err != nil {
 		logger.Log(ERROR, "Connection closed due to failure to write to server: "+err.Error())
@@ -109,7 +153,7 @@ func HandleRequestClient(rqst []byte, conn, connToServer *net.TCPConn, mCipher G
 	}
 
 	if resp[1] == replySucceeded {
-		buildTunnel(conn, connToServer, mCipher)
+		buildTunnel(conn, connToServer, mCipher, "", nil)
 	} else {
 		connToServer.Close()
 		conn.Close()
@@ -117,17 +161,17 @@ func HandleRequestClient(rqst []byte, conn, connToServer *net.TCPConn, mCipher G
 
 }
 
-func handleConnect(req request, conn *net.TCPConn, cipher GFWCipher) response {
+func handleConnect(req request, conn *net.TCPConn, cipher GFWCipher, username string, udata chan DataUsage) response {
 	switch req.addressType {
 	case addressTypeIPv4:
 		{
 			logger.Log(DEBUG, "REQUEST TO IPv4.")
-			return startTcpConnectSession(req.version, req.destinationAddress, addressTypeIPv4, req.destinationPort, conn, cipher)
+			return startTcpConnectSession(req.version, req.destinationAddress, addressTypeIPv4, req.destinationPort, conn, cipher, username, udata)
 		}
 	case addressTypeDomainName:
 		{
 			logger.Log(INFO, "REQUEST TO "+string(req.destinationAddress))
-			return startTcpConnectSession(req.version, req.destinationAddress, addressTypeDomainName, req.destinationPort, conn, cipher)
+			return startTcpConnectSession(req.version, req.destinationAddress, addressTypeDomainName, req.destinationPort, conn, cipher, username, udata)
 		}
 	default:
 		{
@@ -140,7 +184,7 @@ func generateFailureResponse(version byte, reply byte) response {
 	return response{version, reply, reserved, 0, []byte{}, [2]byte{0, 0}}
 }
 
-func startTcpConnectSession(version byte, addr []byte, addrType byte, port [2]byte, conn *net.TCPConn, cipher GFWCipher) response {
+func startTcpConnectSession(version byte, addr []byte, addrType byte, port [2]byte, conn *net.TCPConn, cipher GFWCipher, username string, udata chan DataUsage) response {
 	var addrString string
 	if addrType == addressTypeDomainName {
 		addrString = string(addr[1:])
@@ -167,7 +211,7 @@ func startTcpConnectSession(version byte, addr []byte, addrType byte, port [2]by
 			addrType = addressTypeIPv6
 		}
 		logger.Log(DEBUG, "Building tunnel.")
-		go buildTunnel(connToTarget, conn, cipher)
+		go buildTunnel(connToTarget, conn, cipher, username, udata)
 		return response{version, replySucceeded, reserved, addrType, ipAddrBytes, parsePort(portNumber)}
 		// localAddr, _ := net.ResolveTCPAddr("tcp", ":0")
 		// ln, err := net.ListenTCP("tcp", localAddr)
@@ -220,13 +264,13 @@ func startTcpConnectSession(version byte, addr []byte, addrType byte, port [2]by
 // 	}
 // }
 
-func buildTunnel(fromTarget, toClient *net.TCPConn, cipher GFWCipher) {
+func buildTunnel(fromTarget, toClient *net.TCPConn, cipher GFWCipher, username string, udata chan DataUsage) {
 	tunnelForward := make(chan []byte)
 	tunnelBackward := make(chan []byte)
 	errorChannelForward := make(chan error)
 	errorChannelBackward := make(chan error)
-	go handleTunnel(fromTarget, tunnelForward, tunnelBackward, errorChannelForward, errorChannelBackward, true, cipher)
-	go handleTunnel(toClient, tunnelBackward, tunnelForward, errorChannelBackward, errorChannelForward, false, cipher)
+	go handleTunnel(fromTarget, tunnelForward, tunnelBackward, errorChannelForward, errorChannelBackward, true, cipher, username, udata)
+	go handleTunnel(toClient, tunnelBackward, tunnelForward, errorChannelBackward, errorChannelForward, false, cipher, "", nil)
 
 	// go func() {
 	// 	for {
@@ -240,7 +284,7 @@ func buildTunnel(fromTarget, toClient *net.TCPConn, cipher GFWCipher) {
 	// }()
 }
 
-func handleTunnel(target *net.TCPConn, receiver <-chan []byte, sender chan<- []byte, errorChannelF <-chan error, errorChannelB chan<- error, shouldEncrypt bool, cipher GFWCipher) {
+func handleTunnel(target *net.TCPConn, receiver <-chan []byte, sender chan<- []byte, errorChannelF <-chan error, errorChannelB chan<- error, shouldEncrypt bool, cipher GFWCipher, username string, udata chan DataUsage) {
 	errChan := make(chan error)
 	dataChan := make(chan []byte)
 	go func(dch chan []byte, ech chan error) {
@@ -255,6 +299,10 @@ func handleTunnel(target *net.TCPConn, receiver <-chan []byte, sender chan<- []b
 				if cipher != nil {
 					if shouldEncrypt {
 						cipher.Encrypt(buf[:length], buf[:length])
+						if username != "" {
+							dataUsed := DataUsage{username, int64(length)}
+							udata <- dataUsed
+						}
 					} else {
 						cipher.Decrypt(buf[:length], buf[:length])
 					}

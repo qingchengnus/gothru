@@ -27,6 +27,7 @@ type serverConfig struct {
 type user struct {
 	Username string `xml:"username"`
 	Password string `xml:"password"`
+	Datacap  int    `xml:"datacap"`
 }
 
 const (
@@ -43,7 +44,7 @@ const (
 	defaultConfigFileName        = "config.xml"
 	loadingConfigFileError       = "Failed to load the config file due to: "
 	clientConfigFileInvalidError = "Config file format is not correct, or some of the mandatory parameters are missing."
-	serverConfigFileInvalidError = "Config file format is not correct, or you do not have a user."
+	serverConfigFileInvalidError = "Config file format is not correct, or you do not have a user, or your username or password is not set."
 	serverUsage                  = "Run as a server with server flag on."
 	serverListenError            = "Failed to listen due to: "
 )
@@ -85,23 +86,34 @@ func main() {
 	}
 
 	if server {
-		serverPort, users, err := parseServerConfigFile(realConfigFilePath)
+		serverPort, users, dataCaps, err := parseServerConfigFile(realConfigFilePath)
 		if err != nil {
 			fmt.Println(loadingConfigFileError + err.Error())
 			return
 		}
-
+		userData := getUsersData(users)
 		listenAddress, _ := net.ResolveTCPAddr("tcp", ":"+serverPort)
 		ln, err := net.ListenTCP("tcp", listenAddress)
+		dataChan := make(chan bypasser.DataUsage)
 		if err != nil {
 			fmt.Println(serverListenError + err.Error())
 		} else {
+			go func() {
+				for {
+					d := <-dataChan
+					userData[d.Username] = userData[d.Username] + d.DataUsed
+					if dataCaps[d.Username] != 0 && userData[d.Username] >= dataCaps[d.Username] {
+						users[d.Username] = bypasser.InvalidPassword
+					}
+				}
+
+			}()
 			for {
 				conn, err := ln.AcceptTCP()
 				if err != nil {
 					continue
 				}
-				go bypasser.HandleConnectionNegotiationServer(conn, users)
+				go bypasser.HandleConnectionNegotiationServer(conn, users, dataChan)
 			}
 		}
 
@@ -175,30 +187,42 @@ func parseClientConfigFile(filePath string) (string, string, string, string, err
 	}
 }
 
-func parseServerConfigFile(filePath string) (string, map[string]string, error) {
+func parseServerConfigFile(filePath string) (string, map[string]string, map[string]int64, error) {
 	xmlFile, err := os.Open(filePath)
 	if err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
 	defer xmlFile.Close()
 	decoder := xml.NewDecoder(xmlFile)
 	var s serverConfig
 	err = decoder.Decode(&s)
 	if err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	} else {
 		if len(s.Users) == 0 {
-			return "", nil, errors.New(serverConfigFileInvalidError)
+			return "", nil, nil, errors.New(serverConfigFileInvalidError)
 		}
 		serverPort := defaultServerPort
 		if s.Server_port != "" {
 			serverPort = s.Server_port
 		}
 		usersMap := make(map[string]string)
+		usersData := make(map[string]int64)
 		for _, u := range s.Users {
+			if u.Username == "" || u.Password == "" {
+				return "", nil, nil, errors.New(serverConfigFileInvalidError)
+			}
 			usersMap[u.Username] = u.Password
+			usersData[u.Username] = int64(u.Datacap * 1024 * 1024)
 		}
-
-		return serverPort, usersMap, nil
+		return serverPort, usersMap, usersData, nil
 	}
+}
+
+func getUsersData(users map[string]string) map[string]int64 {
+	usersData := make(map[string]int64)
+	for username, _ := range users {
+		usersData[username] = 0
+	}
+	return usersData
 }

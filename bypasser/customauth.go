@@ -29,17 +29,18 @@ type CustomAuthenticator struct {
 }
 
 const (
-	AES256KEY = "Internat"
+	AES256KEY       = "Internat"
+	InvalidPassword = "iNvaLIDpAsSwoRd"
 )
 
 const (
 	CipherTypeInUse = CipherTypeSimple
 )
 
-func (c CustomAuthenticator) HandleAuthentication(packet []byte, legalUsers map[string]string) ([]byte, GFWCipher, bool, error) {
+func (c CustomAuthenticator) HandleAuthentication(packet []byte, legalUsers map[string]string) ([]byte, GFWCipher, string, bool, error) {
 	req, ok := formatCustomAuthRequest(packet)
 	if !ok {
-		return []byte{}, nil, false, errors.New("Invalid username/password packet.")
+		return []byte{}, nil, "", false, errors.New("Invalid username/password packet.")
 	}
 
 	result := validateCustomCredentials(req, legalUsers)
@@ -48,23 +49,23 @@ func (c CustomAuthenticator) HandleAuthentication(packet []byte, legalUsers map[
 			randomKey := make([]byte, 1)
 			rand.Read(randomKey)
 			resp := customAuthResponse{req.version, validationStatusSuccess, randomKey, []byte{}}
-			return parseCustomAuthResponse(resp), NewShiftCipher(randomKey[0]), true, nil
+			return parseCustomAuthResponse(resp), NewShiftCipher(randomKey[0]), string(req.username), true, nil
 		} else if req.cipherType == CipherTypeAES256 {
 			initialVector := make([]byte, des.BlockSize)
 			rand.Read(initialVector)
 			mCipher, err := NewAESCTRCipher([]byte(AES256KEY), initialVector)
 			if err != nil {
-				return []byte{}, nil, false, errors.New("Failed to generate AESCTRCipher." + err.Error())
+				return []byte{}, nil, "", false, errors.New("Failed to generate AESCTRCipher." + err.Error())
 			}
 			resp := customAuthResponse{req.version, validationStatusSuccess, []byte(AES256KEY), initialVector}
 
-			return parseCustomAuthResponse(resp), mCipher, true, nil
+			return parseCustomAuthResponse(resp), mCipher, string(req.username), true, nil
 		} else {
-			return []byte{}, nil, false, errors.New("Unknown cryption method.")
+			return []byte{}, nil, "", false, errors.New("Unknown cryption method.")
 		}
 	} else {
 		resp := customAuthResponse{req.version, validationStatusFailure, []byte{}, []byte{}}
-		return parseCustomAuthResponse(resp), nil, false, nil
+		return parseCustomAuthResponse(resp), nil, "", false, nil
 	}
 }
 
@@ -126,7 +127,7 @@ func validateCustomAuthRequest(req []byte) bool {
 
 func validateCustomCredentials(req customAuthRequest, legalUsers map[string]string) bool {
 	pword, ok := legalUsers[string(req.username)]
-	if !ok {
+	if !ok || pword == InvalidPassword {
 		return false
 	} else {
 		return pword == string(req.password)
