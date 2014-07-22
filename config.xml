@@ -1,0 +1,29 @@
+<!-- Sample config.xml for server -->
+<config>
+    <server_port>18888</server_port>
+    <user>
+        <username>public1</username>
+        <password>12345</password>
+        <datacap>100000</datacap>
+    </user>
+    <user>
+        <username>public2</username>
+        <password>12345</password>
+        <datacap>100000</datacap>
+    </user>
+    <user>
+        <username>public3</username>
+        <password>12345</password>
+        <datacap>100000</datacap>
+    </user>
+    <user>
+        <username>public4</username>
+        <password>12345</password>
+        <datacap>100000</datacap>
+    </user>
+    <user>
+        <username>public5</username>
+        <password>12345</password>
+        <datacap>100000</datacap>
+    </user>
+</config>
