@@ -10,13 +10,13 @@ Developed by Qing Cheng to gothru the GREAT FIRE WALL. Contact me at qingchengnu
 
 ## How To Get It
 
-Find the executable in dist folder for you OS and Architechture and simply get it!
+Find the executable in the dist folder for you OS and Architechture and simply get it!
 
 If you cannot find the executable for your system, you have to build it yourself.
 
-Install Golang on your system and set you GOPATH environment variable.
+Install Golang on your system and set you GOPATH environment variable. If you are new to Go, follow http://golang.org/doc/code.html
 
-then open your terminal and run
+Then open your terminal and run
 
 ```go
 go get github.com/qingchengnus/gothru
