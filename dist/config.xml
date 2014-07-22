@@ -1,3 +1,4 @@
+<!-- Sample config.xml for client -->
 <config>
     <server_address>123.456.789.123</server_address>
     <server_port>18888</server_port>

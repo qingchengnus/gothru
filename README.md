@@ -4,6 +4,7 @@ gothru is a socks 5 server which will help you
 
 * GO THROUGH a firewall
 * conveniently manage the access to your server by adding white-listed users to the config file.
+* set the maximum amount of data a user can transfer through the server.
 
 
 Developed by Qing Cheng to gothru the GREAT FIRE WALL. Contact me at qingchengnus@gmail.com.
@@ -35,14 +36,22 @@ First, have your config.xml file ready! Here is an example:
     <user>
     	<username>babyfatdragon</username>
     	<password>1352463570</password>
+        <datacap>10000</datacap>
     </user>
     <user>
     	<username>queenofpain</username>
     	<password>987654321</password>
     </user>
+    <user>
+        <username>queenofpain</username>
+        <password>987654321</password>
+        <datacap>0</datacap>
+    </user>
 </config>
 ```
 You can have as many user as you want. Once you decide prevent a user from being able to access your server, just remove him from  the config file and restart the server!
+Datacap is in MB. 10000 means 10000MB, after the user exceeded  the amount, he will not be able to use the server.
+Not setting, or setting datacap to 0 means there is no data limit on this user.
 
 After you set up the config.xml, run
 ```go
@@ -74,9 +83,6 @@ You can also run
 gothru -h
 ```
 for help.
-## Future plan
-* Allow server to block requests to certain hosts.(Black list)
-* Allow server to only accept requests to certain hosts.(White list)
-* Some statistics data, for example, amount of data transfered by each user.
-* Set cap to data usage for each user.
+## TO DO
+* Implement bind and udpassciate method
 * Contact me via qingchengnus@gmail.com if you have interesting ideas.
