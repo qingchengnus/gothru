@@ -83,6 +83,27 @@ You can also run
 gothru -h
 ```
 for help.
+
+## Mac Usage
+Download the config.xml in dist/ and gothru executable file in dist/darwin-amd64/ and put them in the same directory. Here is an example of the config.xml:
+```xml
+<config>
+    <server_address>123.456.789.123</server_address>
+    <server_port>18888</server_port>
+    <local_port>16666</local_port>
+    <username>public4</username>
+    <password>12345</password>
+</config>
+```
+After you change the server_address to 128.199.143.166, which is my own instance, then run
+```go
+gothru //if your the config.xml is in your current directory and its name is exactly config.xml!
+```
+
+Now Open Network Preferences, click Advanced, choose Proxies, tick SOCKS Proxy, set SOCKS Proxy Server to 127.0.0.1:16666 and do not tick Proxy server requires password. Then click OK and also remember to click APPLY!
+
+Now you can go through the GFW! Use browsers that use your system proxy settings, in my case, chrome and safari. You can also direct other software's traffic to 127.0.0.1:16666 to go through the GFW.
+
 ## TO DO
 * Implement bind and udpassciate method
 * Contact me via qingchengnus@gmail.com if you have interesting ideas.
