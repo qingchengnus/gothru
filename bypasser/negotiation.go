@@ -352,7 +352,7 @@ func validatePacketLength(packet []byte) bool {
 }
 
 func validateVersion(v byte) bool {
-	return v == 0x05
+	return v == 0x05 || v == 0x04
 }
 
 func validateMethodSelectionPacket(packet []byte) bool {
