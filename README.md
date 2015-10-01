@@ -11,7 +11,7 @@ Developed by Qing Cheng to gothru the GREAT FIRE WALL. Contact me at qingchengnu
 
 ## How To Get It
 
-Find the executable in the dist folder for you OS and Architechture and simply get it!
+Find the executable in the dist folder for you OS and Architecture and simply get it!
 
 If you cannot find the executable for your system, you have to build it yourself.
 
